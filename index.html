@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Battle Rhythm Tracker</title>
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            "u-blue": {
+              50: '#f4f6f9',
+              100: '#e8ecf3',
+              500: '#3c5a8a',
+              600: '#1b365d', // Official USAF Dark Blue color token
+              700: '#152b4b',
+            },
+            slate: {
+              350: '#cbd5e1',
+              450: '#64748b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- External Stylesheet Links -->
+  <link rel="stylesheet" href="style.css?v=1.0.1">
+  
+  <!-- Roboto Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;750;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 flex flex-col h-screen text-slate-700 overflow-hidden">
+
+  <!-- ==========================================
+       MAIN APP HEADER (Z-30 for dropdown layer positioning)
+       ========================================== -->
+  <header class="bg-u-blue-600 text-white shrink-0 shadow-md z-30 select-none no-print">
+    <div class="px-5 py-3 flex items-center justify-between">
+      
+      <!-- Logo / Title & Sync Badge -->
+      <div class="flex items-center gap-3">
+        <h1 class="text-base font-black tracking-wider uppercase flex items-center gap-2">
+          ⚡ Battle Rhythm
+        </h1>
+        <!-- Sync Mode indicator (Shared JSON vs Local Storage status) -->
+        <span id="sync-mode-badge" class="hidden"></span>
+      </div>
+
+      <!-- Center Controls: Time Horizon & Briefing Mode Filters -->
+      <div class="flex items-center gap-6">
+        
+        <!-- Briefing Mode filter -->
+        <div class="flex items-center gap-1.5 bg-u-blue-700/50 p-1 rounded-lg border border-white/10">
+          <span class="text-[9px] text-u-blue-100 font-extrabold uppercase px-1.5">View Mode:</span>
+          <button id="btn-briefing-full" onclick="setBriefingMode('full')" class="bg-white text-u-blue-600 px-2.5 py-1 text-[11px] font-extrabold rounded shadow-sm transition">
+            Full (POC/Team)
+          </button>
+          <button id="btn-briefing-staff" onclick="setBriefingMode('staff')" class="text-u-blue-100 hover:text-white hover:bg-u-blue-500/30 px-2.5 py-1 text-[11px] font-semibold rounded transition">
+            Staff View
+          </button>
+        </div>
+
+        <!-- Zoom Horizon Filters -->
+        <div class="flex items-center gap-1 bg-u-blue-700/50 p-1 rounded-lg border border-white/10">
+          <span class="text-[9px] text-u-blue-100 font-extrabold uppercase px-1.5">Horizon:</span>
+          <button id="btn-horizon-3" onclick="setHorizonRange(3)" class="text-u-blue-100 hover:text-white hover:bg-u-blue-500/30 px-2.5 py-1 text-[11px] font-semibold rounded transition">
+            3 Months
+          </button>
+          <button id="btn-horizon-6" onclick="setHorizonRange(6)" class="text-u-blue-100 hover:text-white hover:bg-u-blue-500/30 px-2.5 py-1 text-[11px] font-semibold rounded transition">
+            6 Months
+          </button>
+          <button id="btn-horizon-12" onclick="setHorizonRange(12)" class="text-u-blue-100 hover:text-white hover:bg-u-blue-500/30 px-2.5 py-1 text-[11px] font-semibold rounded transition">
+            1 Year (Col)
+          </button>
+        </div>
+        
+      </div>
+
+      <!-- Navigation & Action Actions Dropdown -->
+      <div class="flex items-center gap-3">
+        
+        <!-- Navigation arrows -->
+        <div class="flex items-center bg-u-blue-700/50 rounded-lg overflow-hidden border border-white/10">
+          <button onclick="shiftTimeframe(-1)" title="Shift Back 1 Month" class="px-2.5 py-1.5 hover:bg-u-blue-500/40 text-u-blue-100 hover:text-white text-xs font-bold transition">◀</button>
+          <button onclick="goToToday()" class="px-3 py-1.5 hover:bg-u-blue-500/40 text-u-blue-100 hover:text-white text-[10px] font-black uppercase tracking-wider transition border-x border-white/10">Today</button>
+          <button onclick="shiftTimeframe(1)" title="Shift Forward 1 Month" class="px-2.5 py-1.5 hover:bg-u-blue-500/40 text-u-blue-100 hover:text-white text-xs font-bold transition">▶</button>
+        </div>
+
+        <button onclick="openAddTaskModal()" class="bg-[#2E7D32] hover:bg-[#1B5E20] text-white text-[11px] font-black tracking-wide uppercase px-4 py-2 rounded-lg transition shadow-md">
+          ✚ Add Task
+        </button>
+
+        <!-- Actions Dropdown Container -->
+        <div id="actions-dropdown-container" class="relative">
+          <button onclick="toggleActionsDropdown()" class="bg-u-blue-700 hover:bg-u-blue-500 text-white text-[11px] font-black tracking-wide uppercase px-3.5 py-2 rounded-lg transition border border-white/15 flex items-center gap-1.5">
+            Actions <span>▼</span>
+          </button>
+          
+          <div id="actions-dropdown-menu" class="hidden absolute right-0 mt-2 w-44 bg-white text-slate-800 rounded-lg shadow-xl border border-slate-200 py-1 z-50 text-xs">
+            <button onclick="openCSVInstructionsModal()" class="w-full text-left px-4 py-2 hover:bg-slate-100 flex items-center gap-2">📥 Import CSV...</button>
+            <button onclick="exportCSV()" class="w-full text-left px-4 py-2 hover:bg-slate-100 flex items-center gap-2">📤 Export CSV</button>
+            <hr class="my-1 border-slate-200">
+            <button onclick="showModal('columns-modal', 'columns-modal-card'); renderActiveColumnsList(); toggleActionsDropdown();" class="w-full text-left px-4 py-2 hover:bg-slate-100 flex items-center gap-2">⚙️ AOR Columns...</button>
+            <button onclick="pullLatestSharedJSON(); toggleActionsDropdown();" class="w-full text-left px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-u-blue-600 font-semibold">☁️ Reset to Master JSON</button>
+            <button onclick="loadSeedData(); toggleActionsDropdown();" class="w-full text-left px-4 py-2 hover:bg-slate-100 flex items-center gap-2 text-emerald-700 font-medium">🔄 Load Seed Data</button>
+            <button onclick="clearAllData(); toggleActionsDropdown();" class="w-full text-left px-4 py-2 hover:bg-slate-100 text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium">⚠️ Clear Board</button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Active Filter Chips bar -->
+    <div class="bg-u-blue-700 px-5 py-2 border-t border-white/10 flex items-center gap-3">
+      <span class="text-[9px] font-black uppercase text-u-blue-200 tracking-wider">AOR Columns:</span>
+      <div id="column-filters-container" class="flex flex-wrap items-center gap-2 grow">
+        <!-- Rendered dynamically -->
+      </div>
+      <!-- Hidden file input channels -->
+      <input type="file" id="csv-file-input" onchange="importCSV(event)" accept=".csv" class="hidden">
+    </div>
+  </header>
+
+  <!-- ==========================================
+       GRID BOARD CONTENT AREA
+       ========================================== -->
+  <main id="board-scroll-container" class="grow overflow-y-auto w-full relative">
+    <div id="battle-rhythm-grid" class="grid min-w-max w-full bg-white select-none">
+      <!-- Sticky headers and rows mapped dynamically in renderGrid() -->
+    </div>
+  </main>
+
+  <!-- ==========================================
+       MODAL: ADD & EDIT TASK DETAILS
+       ========================================== -->
+  <div id="task-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 modal-backdrop no-print">
+    <div id="task-modal-card" class="bg-white w-full max-w-lg rounded-xl shadow-2xl border border-slate-200 transform scale-95 opacity-0 transition-all duration-200 flex flex-col max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 bg-[#1B365D] text-white flex items-center justify-between rounded-t-xl shrink-0">
+        <h2 id="modal-title" class="font-bold text-sm tracking-wide uppercase">Add New Task</h2>
+        <button onclick="closeTaskModal()" class="text-white/80 hover:text-white text-lg font-bold">×</button>
+      </div>
+
+      <!-- Modal Scrollable Body -->
+      <div class="p-5 overflow-y-auto space-y-4 text-xs grow">
+        <input type="hidden" id="task-id">
+
+        <!-- Title inputs -->
+        <div>
+          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Task Title <span class="text-red-500">*</span></label>
+          <input type="text" id="task-title-input" placeholder="e.g. Faculty Evaluations" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:bg-white focus:border-u-blue-600 transition">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <!-- AOR Owner -->
+          <div>
+            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">AOR Column (Owner)</label>
+            <select id="task-owner-select" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-bold focus:bg-white focus:border-u-blue-600 transition">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          <!-- POC label -->
+          <div>
+            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Point of Contact (POC)</label>
+            <input type="text" id="task-poc-input" placeholder="e.g. Director of Ops" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-u-blue-600 transition">
+          </div>
+        </div>
+
+        <!-- Recurrence selector -->
+        <div>
+          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">Recurrence Type</label>
+          <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200/50">
+            <button id="btn-recurrence-annual" onclick="setRecurrenceUI('annual')" class="grow py-1 text-xs font-bold rounded-md bg-[#1B365D] text-white shadow-sm transition">
+              Annual Recurring
+            </button>
+            <button id="btn-recurrence-one-off" onclick="setRecurrenceUI('one-off')" class="grow py-1 text-xs font-bold rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-200 transition">
+              One-off Event
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Date Selection Panel -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+          
+          <!-- Annual Multi-Month Selectors -->
+          <div id="annual-month-container" class="space-y-2">
+            <span class="block text-[9px] font-black uppercase tracking-wider text-slate-450">Select Active Months:</span>
+            <div class="grid grid-cols-4 gap-2">
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="January" class="rounded accent-u-blue-600"> Jan
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="February" class="rounded accent-u-blue-600"> Feb
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="March" class="rounded accent-u-blue-600"> Mar
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="April" class="rounded accent-u-blue-600"> Apr
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="May" class="rounded accent-u-blue-600"> May
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="June" class="rounded accent-u-blue-600"> Jun
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="July" class="rounded accent-u-blue-600"> Jul
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="August" class="rounded accent-u-blue-600"> Aug
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="September" class="rounded accent-u-blue-600"> Sep
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="October" class="rounded accent-u-blue-600"> Oct
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="November" class="rounded accent-u-blue-600"> Nov
+              </label>
+              <label class="flex items-center gap-1.5 font-semibold text-slate-650 cursor-pointer select-none">
+                <input type="checkbox" name="recurrence-months" value="December" class="rounded accent-u-blue-600"> Dec
+              </label>
+            </div>
+          </div>
+
+          <!-- One-off Target Selectors -->
+          <div id="one-off-container" class="hidden grid grid-cols-2 gap-3">
+            <div>
+              <span class="block text-[9px] font-black uppercase tracking-wider text-slate-450 mb-1">Target Month:</span>
+              <select id="task-month-select" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold focus:border-u-blue-600">
+                <option value="January">January</option>
+                <option value="February">February</option>
+                <option value="March">March</option>
+                <option value="April">April</option>
+                <option value="May">May</option>
+                <option value="June">June</option>
+                <option value="July" selected>July</option>
+                <option value="August">August</option>
+                <option value="September">September</option>
+                <option value="October">October</option>
+                <option value="November">November</option>
+                <option value="December">December</option>
+              </select>
+            </div>
+            <div>
+              <span class="block text-[9px] font-black uppercase tracking-wider text-slate-450 mb-1">Specific Year:</span>
+              <input type="number" id="task-year-input" value="2026" min="2020" max="2050" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-u-blue-600">
+            </div>
+          </div>
+
+          <!-- Month Subdivision (Early, Mid, Late) -->
+          <div class="mt-3 pt-3 border-t border-slate-200">
+            <span class="block text-[9px] font-black uppercase tracking-wider text-slate-450 mb-1">Month Subdivision Period:</span>
+            <select id="task-period-select" class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-bold focus:border-u-blue-600">
+              <option value="Early" selected>Early (Days 1 - 10)</option>
+              <option value="Mid">Mid (Days 11 - 20)</option>
+              <option value="Late">Late (Days 21 - End)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 items-center">
+          <!-- Specific Trigger Label -->
+          <div>
+            <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Timeframe Trigger Label</label>
+            <input type="text" id="task-trigger-input" placeholder="e.g. First week of October" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-u-blue-600 transition">
+          </div>
+          <!-- Staff View Importance Toggle -->
+          <div class="pt-3.5">
+            <label class="flex items-center gap-2 cursor-pointer select-none bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5">
+              <input type="checkbox" id="task-staff-input" checked class="rounded accent-u-blue-600 w-4 h-4 cursor-pointer">
+              <div class="flex flex-col text-[10px]">
+                <span class="font-extrabold text-slate-700 uppercase">Include in Staff View</span>
+                <span class="text-[8.5px] text-slate-450 font-medium">Displays during full briefings</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Notes description -->
+        <div>
+          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Continuity Notes & Links</label>
+          <textarea id="task-notes-input" rows="3" placeholder="Details, milestones, template paths..." class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:bg-white focus:border-u-blue-600 transition"></textarea>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50 rounded-b-xl shrink-0">
+        <div class="flex items-center gap-2">
+          <button id="btn-delete-task" onclick="deleteActiveTask()" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold px-3 py-2 rounded-lg transition">
+            Delete
+          </button>
+          <button id="btn-duplicate-task" onclick="duplicateActiveTask()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-3 py-2 rounded-lg transition">
+            Duplicate
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="closeTaskModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-5 py-2 rounded-lg transition">
+            Cancel
+          </button>
+          <button onclick="saveActiveTask()" class="bg-[#1B365D] hover:bg-[#1B365D]/80 text-white text-xs font-bold px-6 py-2 rounded-lg transition shadow-md">
+            Save Task
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: COLUMN / AOR SETTINGS
+       ========================================== -->
+  <div id="columns-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 modal-backdrop no-print">
+    <div id="columns-modal-card" class="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-200 transform scale-95 opacity-0 transition-all duration-200 flex flex-col max-h-[80vh]">
+      
+      <div class="px-5 py-4 bg-[#1B365D] text-white flex items-center justify-between rounded-t-xl shrink-0">
+        <h2 class="font-bold text-sm tracking-wide uppercase">Manage AOR Columns</h2>
+        <button onclick="hideModal('columns-modal', 'columns-modal-card')" class="text-white/80 hover:text-white text-lg font-bold">×</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4 text-xs grow">
+        
+        <!-- Add Column Input -->
+        <div class="flex gap-2">
+          <input type="text" id="new-column-input" placeholder="e.g. Plans" class="grow bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-bold focus:bg-white transition uppercase text-[11px] tracking-wider">
+          <button onclick="addNewColumn()" class="bg-[#1B365D] hover:bg-[#1B365D]/80 text-white font-bold px-4 py-2 rounded-lg transition shadow">
+            Add
+          </button>
+        </div>
+
+        <hr class="border-slate-200">
+
+        <!-- Column Grid List -->
+        <div id="columns-list-container" class="space-y-2">
+          <!-- Rendered dynamically -->
+        </div>
+
+      </div>
+
+      <div class="p-4 border-t border-slate-200 flex items-center justify-end bg-slate-50 rounded-b-xl shrink-0">
+        <button onclick="hideModal('columns-modal', 'columns-modal-card')" class="bg-[#1B365D] text-white text-xs font-bold px-5 py-2 rounded-lg hover:bg-[#1B365D]/80 transition shadow">
+          Done
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: CSV IMPORT GUIDELINES
+       ========================================== -->
+  <div id="csv-instructions-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4 modal-backdrop no-print">
+    <div id="csv-instructions-card" class="bg-white w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 transform scale-95 opacity-0 transition-all duration-200 flex flex-col max-h-[85vh]">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 bg-[#1B365D] text-white flex items-center justify-between rounded-t-xl shrink-0">
+        <h2 class="font-bold text-sm tracking-wide uppercase flex items-center gap-2">📋 CSV Schema Import Instructions</h2>
+        <button onclick="closeCSVInstructionsModal()" class="text-white/80 hover:text-white text-lg font-bold">×</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 overflow-y-auto space-y-4 text-xs text-slate-600">
+        <p class="leading-relaxed">
+          The Battle Rhythm CSV Importer maps column headers to task properties. To import tasks from Microsoft Excel, Google Sheets, or a text editor, ensure your CSV structure matches these rules:
+        </p>
+
+        <!-- Column Specifications Table -->
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <table class="min-w-full divide-y divide-slate-200 text-[11px] text-left">
+            <thead class="bg-slate-50 text-slate-700 font-bold">
+              <tr>
+                <th class="px-3 py-2 border-r">Header Name</th>
+                <th class="px-3 py-2 border-r">Type / Required</th>
+                <th class="px-3 py-2">Accepted Values & Format Example</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white text-slate-600">
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Title</td>
+                <td class="px-3 py-2 border-r text-red-600 font-semibold">Required</td>
+                <td class="px-3 py-2">The name of the task card. (e.g. <code>Faculty Evaluations</code>)</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Column</td>
+                <td class="px-3 py-2 border-r text-red-600 font-semibold">Required</td>
+                <td class="px-3 py-2">The Area of Responsibility column name. (e.g. <code>Ops</code>, <code>Curriculum</code>)</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">POC</td>
+                <td class="px-3 py-2 border-r text-slate-400">Optional</td>
+                <td class="px-3 py-2">Role, specific position, or email POC. (e.g. <code>Personnelist</code>)</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Recurrence</td>
+                <td class="px-3 py-2 border-r text-red-600 font-semibold">Required</td>
+                <td class="px-3 py-2">Use either <code>annual</code> (recurring yearly) or <code>one-off</code> (occurs once).</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Period</td>
+                <td class="px-3 py-2 border-r text-red-600 font-semibold">Required</td>
+                <td class="px-3 py-2">Must be either: <code>Early</code>, <code>Mid</code>, or <code>Late</code>.</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Months</td>
+                <td class="px-3 py-2 border-r text-red-600 font-semibold">Required</td>
+                <td class="px-3 py-2">Full month names. Use semicolons for multiples (e.g. <code>July;December;May</code>)</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Year</td>
+                <td class="px-3 py-2 border-r text-slate-400">Conditional</td>
+                <td class="px-3 py-2">Required ONLY if Recurrence is <code>one-off</code>. (e.g. <code>2026</code>)</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Trigger</td>
+                <td class="px-3 py-2 border-r text-slate-400">Optional</td>
+                <td class="px-3 py-2">Brief timeframe explanation label. (e.g. <code>First week of October</code>)</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800">Notes</td>
+                <td class="px-3 py-2 border-r text-slate-400">Optional</td>
+                <td class="px-3 py-2">Notes, instructions, continuity details, templates.</td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 font-semibold border-r text-slate-800 text-u-blue-600">StaffView</td>
+                <td class="px-3 py-2 border-r text-slate-400">Optional</td>
+                <td class="px-3 py-2">Set to <code>TRUE</code> (visible in Briefing mode) or <code>FALSE</code> (hidden in Briefing mode, POC view only). Defaults to <code>TRUE</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Rules Checklist -->
+        <div class="space-y-1.5 bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <span class="block font-bold text-slate-800 tracking-wide uppercase text-[9px]">Important Rules:</span>
+          <ul class="list-disc pl-4 space-y-1 text-slate-600">
+            <li>Spell the months fully with capitals (e.g., <code>October</code>, not <code>Oct</code> or <code>10</code>).</li>
+            <li>If a column name in your CSV does not exist on the board, the board will **automatically create** the new column and assign the task to it.</li>
+            <li>Double-quotes are recommended around fields that contain commas or line-breaks (e.g., Notes).</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50 rounded-b-xl shrink-0">
+        <button onclick="downloadCSVTemplate()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition flex items-center gap-1">
+          📥 Download Template CSV
+        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="closeCSVInstructionsModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition">
+            Cancel
+          </button>
+          <button onclick="triggerCSVImport()" class="bg-[#1B365D] hover:bg-[#1B365D]/80 text-white text-xs font-bold px-5 py-2 rounded-lg transition shadow-md">
+            Choose CSV File...
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Main Application Logic Script Bindings -->
+  <script src="app.js?v=1.0.1"></script>
+</body>
+</html>
