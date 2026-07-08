@@ -1054,9 +1054,9 @@ function importCSV(event) {
         const activeIdx = fileIdx !== -1 ? fileIdx : defaultIdx;
         return row[activeIdx] ? row[activeIdx].trim() : '';
       };
-
       const importedTasks = [];
       const importedColumns = new Set(columns);
+      let duplicateCount = 0;
 
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
@@ -1093,6 +1093,22 @@ function importCSV(event) {
 
         const isStaffView = (rawStaff !== 'FALSE' && rawStaff !== '0' && rawStaff !== 'NO');
 
+        // Check for duplicates against existing board tasks or already parsed tasks in this CSV
+        const isDuplicate = [...tasks, ...importedTasks].some(t => 
+          t.title.trim().toLowerCase() === title.trim().toLowerCase() &&
+          t.owner.trim().toLowerCase() === owner.trim().toLowerCase() &&
+          t.recurrenceType === recurrenceType &&
+          t.period === cleanPeriod &&
+          t.months.length === monthsList.length &&
+          t.months.every(m => monthsList.includes(m)) &&
+          t.specificYear === specificYear
+        );
+
+        if (isDuplicate) {
+          duplicateCount++;
+          continue;
+        }
+
         importedColumns.add(owner);
 
         importedTasks.push({
@@ -1111,7 +1127,12 @@ function importCSV(event) {
       saveToLocalStorage();
       renderColumnFilters();
       renderGrid(false); // Reset view to center today after bulk load
-      alert(`Successfully imported ${importedTasks.length} tasks!`);
+
+      let alertMsg = `Successfully imported ${importedTasks.length} tasks!`;
+      if (duplicateCount > 0) {
+        alertMsg += ` (${duplicateCount} duplicate tasks ignored)`;
+      }
+      alert(alertMsg);
     } catch (err) {
       alert("Import failed: " + err.message);
     }
